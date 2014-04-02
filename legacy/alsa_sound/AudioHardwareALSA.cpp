@@ -53,6 +53,8 @@
     static int number = 0;
 #endif
 
+#define MAX_FILE_NAME 50
+
 extern "C"
 {
     //
@@ -78,6 +80,9 @@ extern "C"
     static int (*csd_start_playback)();
     static int (*csd_stop_playback)();
 #endif
+#endif
+#ifdef AUXPCM_BT_ENABLED
+    static bool is_btsoc_ath3k();
 #endif
 }         // extern "C"
 
@@ -118,6 +123,8 @@ AudioHardwareALSA::AudioHardwareALSA() :
     mVoLTEMicMute = false;
     bool audio_init_done = false;
     int sleep_retry = 0;
+    char ucm_name_str[MAX_FILE_NAME];
+    bool aux_ucm_avail = false;
 #ifdef QCOM_USBAUDIO_ENABLED
     mAudioUsbALSA = new AudioUsbALSA();
     musbPlaybackState = 0;
@@ -236,76 +243,67 @@ AudioHardwareALSA::AudioHardwareALSA() :
             }
         }
         fclose(fp);
-    }
+   }
+   memset(ucm_name_str, 0, MAX_FILE_NAME);
 
-    sleep_retry = 0;
-    while (audio_init_done == false && sleep_retry < MAX_SLEEP_RETRY) {
-        property_get("qcom.audio.init", audio_init, NULL);
-        ALOGD("qcom.audio.init is set to %s\n",audio_init);
-        if(!strncmp(audio_init, "complete", sizeof("complete"))) {
-            audio_init_done = true;
-        } else {
-            ALOGD("Sleeping for 50 ms");
-            usleep(AUDIO_INIT_SLEEP_WAIT*1000);
-            sleep_retry++;
-        }
-    }
-
-    if (codec_rev == 1) {
-        ALOGV("Detected tabla 1.x sound card");
-        snd_use_case_mgr_open(&mUcMgr, "snd_soc_msm");
-    } else if (codec_rev == 3) {
-        ALOGV("Detected sitar 1.x sound card");
-        snd_use_case_mgr_open(&mUcMgr, "snd_soc_msm_Sitar");
-    } else if (codec_rev == 31) {
-        ALOGV("Detected sitar 1.x sound card");
-        snd_use_case_mgr_open(&mUcMgr, "snd_soc_msm_Sitar_Sglte");
-    } else if (codec_rev == 40) {
-        ALOGV("Detected taiko sound card");
-        snd_use_case_mgr_open(&mUcMgr, "snd_soc_msm_Taiko");
-    } else if (codec_rev == 41) {
-        ALOGV("Detected taiko sound card");
-        snd_use_case_mgr_open(&mUcMgr, "snd_soc_msm_Taiko_CDP");
-    } else if (codec_rev == 42) {
-        ALOGV("Detected taiko sound card");
-        snd_use_case_mgr_open(&mUcMgr, "snd_soc_msm_Taiko_Fluid");
-    } else if (codec_rev == 43) {
-        ALOGV("Detected taiko liquid sound card");
-        snd_use_case_mgr_open(&mUcMgr, "snd_soc_msm_Taiko_liquid");
-    } else {
-        property_get("ro.board.platform", platform, "");
-        property_get("ro.baseband", baseband, "");
-        property_get("ro.baseband.arch", baseband_arch, "");
-        if (!strcmp("msm8960", platform) &&
-            (!strcmp("mdm", baseband) || !strcmp("sglte2", baseband) ||
-            !strcmp("mdm", baseband_arch))) {
-            ALOGV("Detected Fusion tabla 2.x");
-            mFusion3Platform = true;
-            if((fp = fopen("/sys/devices/system/soc/soc0/platform_version","r")) == NULL) {
-                ALOGE("Cannot open /sys/devices/system/soc/soc0/platform_version file");
-
-                snd_use_case_mgr_open(&mUcMgr, "snd_soc_msm_2x_Fusion3");
-            } else {
-                while((fgets(platformVer, sizeof(platformVer), fp) != NULL)) {
-                    ALOGV("platformVer %s", platformVer);
-
-                    verNum = atoi(platformVer);
-                    if (verNum == 0x10001) {
-                        snd_use_case_mgr_open(&mUcMgr, "snd_soc_msm_I2SFusion");
-                        break;
-                    } else {
-                        snd_use_case_mgr_open(&mUcMgr, "snd_soc_msm_2x_Fusion3");
-                        break;
-                    }
-                }
-            }
-            fclose(fp);
-        } else {
-            ALOGV("Detected tabla 2.x sound card");
-            snd_use_case_mgr_open(&mUcMgr, "snd_soc_msm_2x");
-        }
-    }
-
+   switch(codec_rev){
+       case 1: strcpy(ucm_name_str, "snd_soc_msm");
+               aux_ucm_avail = true;
+               break;
+       case 3: strcpy(ucm_name_str, "snd_soc_msm_Sitar");
+               aux_ucm_avail = true;
+               break;
+       case 31: strcpy(ucm_name_str, "snd_soc_msm_Sitar_Sglte");
+                break;
+       case 40: strcpy(ucm_name_str, "snd_soc_msm_Taiko");
+                break;
+       case 41: strcpy(ucm_name_str, "snd_soc_msm_Taiko_CDP");
+                break;
+       case 42: strcpy(ucm_name_str, "snd_soc_msm_Taiko_Fluid");
+                break;
+       case 43: strcpy(ucm_name_str, "snd_soc_msm_Taiko_liquid");
+                break;
+       default:
+           property_get("ro.board.platform", platform, "");
+           property_get("ro.baseband", baseband, "");
+           property_get("ro.baseband.arch", baseband_arch, "");
+           if (!strcmp("msm8960", platform) &&
+                   (!strcmp("mdm", baseband) || !strcmp("sglte2", baseband) ||
+                   !strcmp("mdm", baseband_arch))) {
+               ALOGV("Detected Fusion tabla 2.x");
+               mFusion3Platform = true;
+               if((fp = fopen("/sys/devices/system/soc/soc0/platform_version","r")) == NULL) {
+                   ALOGE("Cannot open /sys/devices/system/soc/soc0/platform_version file");
+                   aux_ucm_avail = true;
+                   strcpy(ucm_name_str,"snd_soc_msm_2x_Fusion3");
+               } else {
+                   while((fgets(platformVer, sizeof(platformVer), fp) != NULL)) {
+                       ALOGV("platformVer %s", platformVer);
+                       verNum = atoi(platformVer);
+                       if (verNum == 0x10001) {
+                           strcpy(ucm_name_str,"snd_soc_msm_I2SFusion");
+                           break;
+                       } else {
+                           aux_ucm_avail = true;
+                           strcpy(ucm_name_str,"snd_soc_msm_2x_Fusion3");
+                           break;
+                       }
+                   }
+               }
+               fclose(fp);
+           } else {
+               aux_ucm_avail = true;
+               strcpy(ucm_name_str,"snd_soc_msm_2x");
+           }
+           break;
+   }
+#ifdef AUXPCM_BT_ENABLED
+   if (aux_ucm_avail && is_btsoc_ath3k ()){
+       strcat(ucm_name_str, "_auxpcm");
+   }
+#endif
+   ALOGV("Loading %s UCM", ucm_name_str);
+   snd_use_case_mgr_open(&mUcMgr, ucm_name_str);
 #ifdef QCOM_CSDCLIENT_ENABLED
     if (mFusion3Platform) {
         mCsdHandle = ::dlopen("/system/lib/libcsd-client.so", RTLD_NOW);
@@ -807,7 +805,7 @@ status_t AudioHardwareALSA::setParameters(const String8& keyValuePairs)
         param.remove(key);
     }
 
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
     key = String8(AudioParameter::keyHandleFm);
     if (param.getInt(key, device) == NO_ERROR) {
         // Ignore if device is 0
@@ -885,7 +883,7 @@ String8 AudioHardwareALSA::getParameters(const String8& keys)
     }
 #endif
 
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
 
     key = String8(AudioParameter::keyHandleA2dpDevice);
     if ( param.get(key,value) == NO_ERROR ) {
@@ -1011,7 +1009,7 @@ status_t AudioHardwareALSA::doRouting(int device, char* useCase)
     if(device)
         mALSADevice->mCurDevice = device;
     if ((device == AudioSystem::DEVICE_IN_VOICE_CALL)
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
         || (device == AudioSystem::DEVICE_IN_FM_RX)
         || (device == AudioSystem::DEVICE_IN_FM_RX_A2DP)
 #endif
@@ -1815,14 +1813,7 @@ AudioHardwareALSA::openInputStream(uint32_t devices,
         alsa_handle.rxHandle = 0;
         alsa_handle.ucMgr = mUcMgr;
         snd_use_case_get(mUcMgr, "_verb", (const char **)&use_case);
-        for(it = mDeviceList.begin();
-            it != mDeviceList.end(); ++it) {
-                if((!strcmp(it->useCase, SND_USE_CASE_VERB_HIFI_REC)) ||
-                   (!strcmp(it->useCase, SND_USE_CASE_MOD_CAPTURE_MUSIC))) {
-                    ALOGE("error:Input stream already opened for recording");
-                    return in;
-                }
-        }
+
         if ((use_case != NULL) && (strcmp(use_case, SND_USE_CASE_VERB_INACTIVE))) {
             if ((devices == AudioSystem::DEVICE_IN_VOICE_CALL) &&
                 (newMode == AUDIO_MODE_IN_CALL)) {
@@ -1869,7 +1860,7 @@ AudioHardwareALSA::openInputStream(uint32_t devices,
                                sizeof(SND_USE_CASE_MOD_CAPTURE_VOICE_UL));
                    }
                }
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
             } else if((devices == AudioSystem::DEVICE_IN_FM_RX)) {
                 strlcpy(alsa_handle.useCase, SND_USE_CASE_MOD_CAPTURE_FM, sizeof(alsa_handle.useCase));
             } else if(devices == AudioSystem::DEVICE_IN_FM_RX_A2DP) {
@@ -1930,7 +1921,7 @@ AudioHardwareALSA::openInputStream(uint32_t devices,
                                sizeof(SND_USE_CASE_VERB_UL_REC));
                    }
                 }
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
             } else if(devices == AudioSystem::DEVICE_IN_FM_RX) {
                 strlcpy(alsa_handle.useCase, SND_USE_CASE_VERB_FM_REC, sizeof(alsa_handle.useCase));
             } else if (devices == AudioSystem::DEVICE_IN_FM_RX_A2DP) {
@@ -2128,7 +2119,7 @@ size_t AudioHardwareALSA::getInputBufferSize(uint32_t sampleRate, int format, in
     return bufferSize;
 }
 
-#if defined(QCOM_FM_ENABLED) || defined(STE_FM)
+#ifdef QCOM_FM_ENABLED
 void AudioHardwareALSA::handleFm(int device)
 {
     int newMode = mode();
@@ -2975,6 +2966,12 @@ void AudioHardwareALSA::switchExtOut(int device) {
             }
         }
     }
+    /*If previous device was USB and current device is A2DP, then resampler must be released */
+    else if((mExtOutStream == mA2dpStream) && mResampler != NULL)
+    {
+        release_resampler(mResampler);
+        mResampler = NULL;
+    }
 }
 
 status_t AudioHardwareALSA::isExtOutDevice(int device) {
@@ -3190,3 +3187,26 @@ bool  AudioHardwareALSA::suspendPlaybackOnExtOut_l(uint32_t activeUsecase) {
 }
 
 }       // namespace android_audio_legacy
+
+#ifdef AUXPCM_BT_ENABLED
+static bool is_btsoc_ath3k()
+{
+    char bt_soc[128];
+    bool wifi_init_complete = false;
+    int sleep_retry = 0;
+    while (!wifi_init_complete && sleep_retry < MAX_SLEEP_RETRY) {
+        property_get("qcom.bluetooth.soc", bt_soc, NULL);
+        if (strncmp(bt_soc, "unknown", sizeof("unknown"))) {
+            wifi_init_complete = true;
+        } else {
+            usleep(AUDIO_INIT_SLEEP_WAIT*1000);
+            sleep_retry++;
+        }
+    }
+
+    if (!strncmp(bt_soc, "ath3k", sizeof("ath3k")))
+        return true;
+    else
+        return false;
+}
+#endif /* AUXPCM_BT_ENABLED */

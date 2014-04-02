@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
  * Not a contribution.
  *
  * Copyright (C) 2013 The Android Open Source Project
@@ -60,6 +60,7 @@ struct voip_data {
     struct pcm *pcm_tx;
     struct stream_out *out_stream;
     int ref_count;
+    int out_stream_count;
 };
 
 #define MODE_IS127              0x2
@@ -76,12 +77,14 @@ struct voip_data {
 #define AUDIO_PARAMETER_KEY_VOIP_DTX_MODE           "dtx_on"
 #define AUDIO_PARAMETER_VALUE_VOIP_TRUE             "true"
 #define AUDIO_PARAMETER_KEY_VOIP_CHECK              "voip_flag"
+#define AUDIO_PARAMETER_KEY_VOIP_OUT_STREAM_COUNT   "voip_out_stream_count"
 
 static struct voip_data voip_data = {
   .pcm_rx = NULL,
   .pcm_tx = NULL,
   .out_stream = NULL,
-  .ref_count = 0
+  .ref_count = 0,
+  .out_stream_count = 0
 };
 
 static int voip_set_volume(struct audio_device *adev, int volume);
@@ -348,8 +351,8 @@ static int voip_start_call(struct audio_device *adev,
         }
 
         ALOGD("%s: Opening PCM playback device card_id(%d) device_id(%d)",
-              __func__, SOUND_CARD, pcm_dev_rx_id);
-        voip_data.pcm_rx = pcm_open(SOUND_CARD,
+              __func__, adev->snd_card, pcm_dev_rx_id);
+        voip_data.pcm_rx = pcm_open(adev->snd_card,
                                     pcm_dev_rx_id,
                                     PCM_OUT, voip_config);
         if (voip_data.pcm_rx && !pcm_is_ready(voip_data.pcm_rx)) {
@@ -361,8 +364,8 @@ static int voip_start_call(struct audio_device *adev,
         }
 
         ALOGD("%s: Opening PCM capture device card_id(%d) device_id(%d)",
-              __func__, SOUND_CARD, pcm_dev_tx_id);
-        voip_data.pcm_tx = pcm_open(SOUND_CARD,
+              __func__, adev->snd_card, pcm_dev_tx_id);
+        voip_data.pcm_tx = pcm_open(adev->snd_card,
                                     pcm_dev_tx_id,
                                     PCM_IN, voip_config);
         if (voip_data.pcm_tx && !pcm_is_ready(voip_data.pcm_tx)) {
@@ -400,53 +403,75 @@ error_start_voip:
     return ret;
 }
 
-void voice_extn_compress_voip_set_parameters(struct audio_device *adev,
+int voice_extn_compress_voip_set_parameters(struct audio_device *adev,
                                              struct str_parms *parms)
 {
     char *str;
     char value[32]={0};
-    int ret, rate;
+    int ret = 0, err, rate;
     int min_rate, max_rate;
     bool flag;
+    char *kv_pairs = str_parms_to_str(parms);
 
-    ALOGV("%s: enter: %s", __func__, str_parms_to_str(parms));
+    ALOGV_IF(kv_pairs != NULL, "%s: enter: %s", __func__, kv_pairs);
 
-    ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_VOIP_RATE,
+    err = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_VOIP_RATE,
                             value, sizeof(value));
-    if (ret >= 0) {
+    if (err >= 0) {
         rate = atoi(value);
         voip_set_rate(adev, rate);
         voip_set_evrc_min_max_rate(adev, rate, rate);
     }
 
     memset(value, 0, sizeof(value));
-    ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_VOIP_EVRC_RATE_MIN,
+    err = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_VOIP_EVRC_RATE_MIN,
                             value, sizeof(value));
-    if (ret >= 0) {
+    if (err >= 0) {
         min_rate = atoi(value);
         str_parms_del(parms, AUDIO_PARAMETER_KEY_VOIP_EVRC_RATE_MIN);
         memset(value, 0, sizeof(value));
-        ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_VOIP_EVRC_RATE_MAX,
+        err = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_VOIP_EVRC_RATE_MAX,
                                 value, sizeof(value));
-        if (ret >= 0) {
+        if (err >= 0) {
             max_rate = atoi(value);
             voip_set_evrc_min_max_rate(adev, min_rate, max_rate);
-        }
-        else
+        } else {
             ALOGE("%s: AUDIO_PARAMETER_KEY_VOIP_EVRC_RATE_MAX not found", __func__);
+            ret = -EINVAL;
+            goto done;
+        }
     }
 
     memset(value, 0, sizeof(value));
-    ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_VOIP_DTX_MODE,
+    err = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_VOIP_DTX_MODE,
                             value, sizeof(value));
-    if (ret >= 0) {
+    if (err >= 0) {
         flag = false;
         if (strcmp(value, AUDIO_PARAMETER_VALUE_VOIP_TRUE) == 0)
             flag = true;
         voip_set_dtx(adev, flag);
     }
 
+done:
     ALOGV("%s: exit", __func__);
+    free(kv_pairs);
+    return ret;
+}
+
+void voice_extn_compress_voip_get_parameters(const struct audio_device *adev,
+                                             struct str_parms *query,
+                                             struct str_parms *reply)
+{
+    int ret;
+    char value[32]={0};
+    char *str = NULL;
+
+    ret = str_parms_get_str(query, AUDIO_PARAMETER_KEY_VOIP_OUT_STREAM_COUNT,
+                            value, sizeof(value));
+    if (ret >= 0) {
+        str_parms_add_int(reply, AUDIO_PARAMETER_KEY_VOIP_OUT_STREAM_COUNT,
+                          voip_data.out_stream_count);
+    }
 }
 
 void voice_extn_compress_voip_out_get_parameters(struct stream_out *out,
@@ -476,6 +501,7 @@ void voice_extn_compress_voip_in_get_parameters(struct stream_in *in,
 {
     int ret, val;
     char value[32]={0};
+    char *kv_pairs = NULL;
 
     ALOGV("%s: enter", __func__);
 
@@ -488,7 +514,9 @@ void voice_extn_compress_voip_in_get_parameters(struct stream_in *in,
             str_parms_add_int(reply, AUDIO_PARAMETER_KEY_VOIP_CHECK, false);
     }
 
-    ALOGD("%s: exit: return - %s", __func__, str_parms_to_str(reply));
+    kv_pairs = str_parms_to_str(reply);
+    ALOGD_IF(kv_pairs != NULL, "%s: exit: return - %s", __func__, kv_pairs);
+    free(kv_pairs);
 }
 
 int voice_extn_compress_voip_out_get_buffer_size(struct stream_out *out)
@@ -550,6 +578,7 @@ int voice_extn_compress_voip_close_output_stream(struct audio_stream *stream)
 
     ret = voip_stop_call(adev);
     voip_data.out_stream = NULL;
+    voip_data.out_stream_count--;
 
     ALOGV("%s: exit: status(%d)", __func__, ret);
     return ret;
@@ -570,6 +599,7 @@ int voice_extn_compress_voip_open_output_stream(struct stream_out *out)
         out->config = pcm_config_voip_nb;
 
     voip_data.out_stream = out;
+    voip_data.out_stream_count++;
 
     ret = voip_set_mode(out->dev, out->format);
 
@@ -659,6 +689,20 @@ bool voice_extn_compress_voip_pcm_prop_check()
     if (!strncmp("true", prop_value, sizeof("true")))
     {
         ALOGD("%s: VoIP PCM property is enabled", __func__);
+        return true;
+    }
+    else
+        return false;
+}
+
+bool voice_extn_dedicated_voip_device_prop_check()
+{
+    char prop_value[PROPERTY_VALUE_MAX] = {0};
+
+    property_get("use.dedicated.device.for.voip", prop_value, "0");
+    if (!strncmp("true", prop_value, sizeof("true")))
+    {
+        ALOGD("%s: Using dedicated path for VoIP", __func__);
         return true;
     }
     else

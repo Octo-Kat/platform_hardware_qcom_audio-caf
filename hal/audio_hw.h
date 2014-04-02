@@ -65,6 +65,7 @@ typedef enum {
 
     /* HFP Use case*/
     USECASE_AUDIO_HFP_SCO,
+    USECASE_AUDIO_HFP_SCO_WB,
 
     /* Capture usecases */
     USECASE_AUDIO_RECORD,
@@ -222,7 +223,9 @@ struct audio_device {
     bool speaker_lr_swap;
     struct voice voice;
     unsigned int cur_hdmi_channels;
+    unsigned int cur_wfd_channels;
 
+    int snd_card;
     void *platform;
 
     void *visualizer_lib;
@@ -249,6 +252,12 @@ int enable_audio_route(struct audio_device *adev,
                               bool update_mixer);
 struct audio_usecase *get_usecase_from_list(struct audio_device *adev,
                                                    audio_usecase_t uc_id);
+
+#define LITERAL_TO_STRING(x) #x
+#define CHECK(condition) LOG_ALWAYS_FATAL_IF(!(condition), "%s",\
+            __FILE__ ":" LITERAL_TO_STRING(__LINE__)\
+            " ASSERT_FATAL(" #condition ") failed.")
+
 /*
  * NOTE: when multiple mutexes have to be acquired, always take the
  * stream_in or stream_out mutex first, followed by the audio_device mutex.

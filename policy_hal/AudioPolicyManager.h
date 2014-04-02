@@ -48,6 +48,17 @@ public:
                                             uint32_t format,
                                             uint32_t channels,
                                             AudioSystem::audio_in_acoustics acoustics);
+        virtual audio_io_handle_t getOutput(AudioSystem::stream_type stream,
+                                            uint32_t samplingRate = 0,
+                                            uint32_t format = AudioSystem::FORMAT_DEFAULT,
+                                            uint32_t channels = 0,
+                                            AudioSystem::output_flags flags =
+                                                    AudioSystem::OUTPUT_FLAG_INDIRECT,
+                                            const audio_offload_info_t *offloadInfo = NULL);
+
+        virtual bool isOffloadSupported(const audio_offload_info_t& offloadInfo);
+
+        virtual void setPhoneState(int state);
 protected:
         // return the strategy corresponding to a given stream type
         static routing_strategy getStrategy(AudioSystem::stream_type stream);
@@ -67,8 +78,6 @@ protected:
                                                      bool fromCache = true);
         // select input device corresponding to requested audio source
         virtual audio_devices_t getDeviceForInputSource(int inputSource);
-
-        static bool isVirtualInputDevice(audio_devices_t device);
 
         // compute the actual volume for a given stream according to the requested index and a particular
         // device

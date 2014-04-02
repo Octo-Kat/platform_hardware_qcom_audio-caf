@@ -56,6 +56,10 @@ ifneq ($(ALSA_DEFAULT_SAMPLE_RATE),)
     common_cflags += -DALSA_DEFAULT_SAMPLE_RATE=$(ALSA_DEFAULT_SAMPLE_RATE)
 endif
 
+ifeq ($(strip $(AUDIO_FEATURE_ENABLED_AUXPCM_BT)),true)
+   LOCAL_CFLAGS += -DAUXPCM_BT_ENABLED
+endif
+
 #Do not use Dual MIC scenario in call feature
 #Dual MIC solution(Fluence) feature in Built-in MIC used scenarioes.
 # 1. Handset
@@ -91,6 +95,10 @@ endif
 
 ifeq ($(strip $(BOARD_USES_SEPERATED_VOIP)),true)
     common_cflags += -DSEPERATED_VOIP
+endif
+
+ifeq ($(strip $(BOARD_USES_SEPERATED_FM)),true)
+    common_cflags += -DSEPERATED_FM
 endif
 
 ifeq ($(BOARD_AUDIO_EXPECTS_MIN_BUFFERSIZE),true)

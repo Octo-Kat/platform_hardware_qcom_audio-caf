@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
  * Not a contribution.
  *
  * Copyright (C) 2013 The Android Open Source Project
@@ -135,8 +135,8 @@ int start_call(struct audio_device *adev, audio_usecase_t usecase_id)
     }
 
     ALOGV("%s: Opening PCM playback device card_id(%d) device_id(%d)",
-          __func__, SOUND_CARD, pcm_dev_rx_id);
-    session->pcm_rx = pcm_open(SOUND_CARD,
+          __func__, adev->snd_card, pcm_dev_rx_id);
+    session->pcm_rx = pcm_open(adev->snd_card,
                                pcm_dev_rx_id,
                                PCM_OUT, &voice_config);
     if (session->pcm_rx && !pcm_is_ready(session->pcm_rx)) {
@@ -146,8 +146,8 @@ int start_call(struct audio_device *adev, audio_usecase_t usecase_id)
     }
 
     ALOGV("%s: Opening PCM capture device card_id(%d) device_id(%d)",
-          __func__, SOUND_CARD, pcm_dev_tx_id);
-    session->pcm_tx = pcm_open(SOUND_CARD,
+          __func__, adev->snd_card, pcm_dev_tx_id);
+    session->pcm_tx = pcm_open(adev->snd_card,
                                pcm_dev_tx_id,
                                PCM_IN, &voice_config);
     if (session->pcm_tx && !pcm_is_ready(session->pcm_tx)) {
@@ -189,6 +189,7 @@ bool voice_is_in_call(struct audio_device *adev)
     return in_call;
 }
 
+#ifdef MULTI_VOICE_SESSION_ENABLED
 uint32_t voice_get_active_session_id(struct audio_device *adev)
 {
     int ret = 0;
@@ -280,6 +281,7 @@ int voice_check_and_set_incall_music_usecase(struct audio_device *adev,
 
     return ret;
 }
+#endif
 
 int voice_set_mic_mute(struct audio_device *adev, bool state)
 {
@@ -351,20 +353,35 @@ int voice_stop_call(struct audio_device *adev)
     return ret;
 }
 
+void voice_get_parameters(struct audio_device *adev,
+                          struct str_parms *query,
+                          struct str_parms *reply)
+{
+    voice_extn_get_parameters(adev, query, reply);
+}
+
 int voice_set_parameters(struct audio_device *adev, struct str_parms *parms)
 {
     char *str;
     char value[32];
     int val;
-    int ret = 0;
+    int ret = 0, err;
+    char *kv_pairs = str_parms_to_str(parms);
 
-    ALOGV("%s: enter: %s", __func__, str_parms_to_str(parms));
+    ALOGV_IF(kv_pairs != NULL, "%s: enter: %s", __func__, kv_pairs);
 
-    voice_extn_set_parameters(adev, parms);
-    voice_extn_compress_voip_set_parameters(adev, parms);
+    ret = voice_extn_set_parameters(adev, parms);
+    if (ret != 0)
+        goto done;
 
-    ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_TTY_MODE, value, sizeof(value));
-    if (ret >= 0) {
+#ifdef COMPRESS_VOIP_ENABLED
+    ret = voice_extn_compress_voip_set_parameters(adev, parms);
+    if (ret != 0)
+        goto done;
+#endif
+
+    err = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_TTY_MODE, value, sizeof(value));
+    if (err >= 0) {
         int tty_mode;
         str_parms_del(parms, AUDIO_PARAMETER_KEY_TTY_MODE);
         if (strcmp(value, AUDIO_PARAMETER_VALUE_TTY_OFF) == 0)
@@ -389,18 +406,21 @@ int voice_set_parameters(struct audio_device *adev, struct str_parms *parms)
         }
     }
 
-    ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_INCALLMUSIC,
+#ifdef INCALL_MUSIC_ENABLED
+    err = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_INCALLMUSIC,
                             value, sizeof(value));
-    if (ret >= 0) {
+    if (err >= 0) {
         str_parms_del(parms, AUDIO_PARAMETER_KEY_INCALLMUSIC);
         if (strcmp(value, AUDIO_PARAMETER_VALUE_TRUE) == 0)
             platform_start_incall_music_usecase(adev->platform);
         else
             platform_stop_incall_music_usecase(adev->platform);
      }
+#endif
 
 done:
     ALOGV("%s: exit with code(%d)", __func__, ret);
+    free(kv_pairs);
     return ret;
 }
 
@@ -412,6 +432,7 @@ void voice_init(struct audio_device *adev)
     adev->voice.tty_mode = TTY_MODE_OFF;
     adev->voice.volume = 1.0f;
     adev->voice.mic_mute = false;
+    adev->voice.voice_device_set = false;
     for (i = 0; i < MAX_VOICE_SESSIONS; i++) {
         adev->voice.session[i].pcm_rx = NULL;
         adev->voice.session[i].pcm_tx = NULL;

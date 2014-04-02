@@ -211,9 +211,14 @@ int bassboost_enable(effect_context_t *context)
     bassboost_context_t *bass_ctxt = (bassboost_context_t *)context;
 
     ALOGV("%s", __func__);
-
-    if (!offload_bassboost_get_enable_flag(&(bass_ctxt->offload_bass)))
+    if (!offload_bassboost_get_enable_flag(&(bass_ctxt->offload_bass))) {
         offload_bassboost_set_enable_flag(&(bass_ctxt->offload_bass), true);
+        if (bass_ctxt->ctl && bass_ctxt->strength)
+            offload_bassboost_send_params(bass_ctxt->ctl,
+                                          bass_ctxt->offload_bass,
+                                          OFFLOAD_SEND_BASSBOOST_ENABLE_FLAG |
+                                          OFFLOAD_SEND_BASSBOOST_STRENGTH);
+    }
     return 0;
 }
 
@@ -239,6 +244,11 @@ int bassboost_start(effect_context_t *context, output_context_t *output)
     ALOGV("%s", __func__);
     bass_ctxt->ctl = output->ctl;
     ALOGV("output->ctl: %p", output->ctl);
+    if (offload_bassboost_get_enable_flag(&(bass_ctxt->offload_bass)))
+        if (bass_ctxt->ctl)
+            offload_bassboost_send_params(bass_ctxt->ctl, bass_ctxt->offload_bass,
+                                          OFFLOAD_SEND_BASSBOOST_ENABLE_FLAG |
+                                          OFFLOAD_SEND_BASSBOOST_STRENGTH);
     return 0;
 }
 

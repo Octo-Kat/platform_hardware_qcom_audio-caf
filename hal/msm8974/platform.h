@@ -72,6 +72,9 @@ enum {
     SND_DEVICE_OUT_SPEAKER_AND_ANC_HEADSET,
     SND_DEVICE_OUT_ANC_HANDSET,
     SND_DEVICE_OUT_SPEAKER_PROTECTED,
+    SND_DEVICE_OUT_VOIP_HANDSET,
+    SND_DEVICE_OUT_VOIP_SPEAKER,
+    SND_DEVICE_OUT_VOIP_HEADPHONES,
     SND_DEVICE_OUT_END,
 
     /*
@@ -121,14 +124,14 @@ enum {
     SND_DEVICE_IN_HANDSET_STEREO_DMIC,
     SND_DEVICE_IN_SPEAKER_STEREO_DMIC,
     SND_DEVICE_IN_CAPTURE_VI_FEEDBACK,
+    SND_DEVICE_IN_VOIP_HANDSET_MIC,
+    SND_DEVICE_IN_VOIP_SPEAKER_MIC,
+    SND_DEVICE_IN_VOIP_HEADSET_MIC,
     SND_DEVICE_IN_END,
 
     SND_DEVICE_MAX = SND_DEVICE_IN_END,
 
 };
-
-#define MIXER_CARD 0
-#define SOUND_CARD 0
 
 #define DEFAULT_OUTPUT_SAMPLING_RATE 48000
 
@@ -151,7 +154,7 @@ enum {
  * the buffer size of an input/output stream
  */
 #define DEEP_BUFFER_OUTPUT_PERIOD_SIZE 960
-#define DEEP_BUFFER_OUTPUT_PERIOD_COUNT 8
+#define DEEP_BUFFER_OUTPUT_PERIOD_COUNT 4
 #define LOW_LATENCY_OUTPUT_PERIOD_SIZE 240
 #define LOW_LATENCY_OUTPUT_PERIOD_COUNT 2
 
@@ -172,20 +175,22 @@ enum {
 #define FM_PLAYBACK_PCM_DEVICE 5
 #define FM_CAPTURE_PCM_DEVICE  6
 #define HFP_PCM_RX 5
-#define HFP_SCO_RX 22
-#define HFP_ASM_RX_TX 23
+#define HFP_SCO_RX 23
+#define HFP_ASM_RX_TX 24
 
 #define INCALL_MUSIC_UPLINK_PCM_DEVICE 1
 #define INCALL_MUSIC_UPLINK2_PCM_DEVICE 16
 #define SPKR_PROT_CALIB_RX_PCM_DEVICE 5
-#define SPKR_PROT_CALIB_TX_PCM_DEVICE 22
+#define SPKR_PROT_CALIB_TX_PCM_DEVICE 25
 #define PLAYBACK_OFFLOAD_DEVICE 9
 #define COMPRESS_VOIP_CALL_PCM_DEVICE 3
 
 #ifdef PLATFORM_MSM8610
 #define LOWLATENCY_PCM_DEVICE 12
+#define EC_REF_RX "I2S_RX"
 #else
 #define LOWLATENCY_PCM_DEVICE 15
+#define EC_REF_RX "SLIM_RX"
 #endif
 #ifdef PLATFORM_MSM8x26
 #define COMPRESS_CAPTURE_DEVICE 20
@@ -203,9 +208,14 @@ enum {
 #define VOICE2_CALL_PCM_DEVICE 13
 #define VOLTE_CALL_PCM_DEVICE 21
 #define QCHAT_CALL_PCM_DEVICE 06
-#else
+#elif PLATFORM_MSM8610
 #define VOICE_CALL_PCM_DEVICE 2
 #define VOICE2_CALL_PCM_DEVICE 13
+#define VOLTE_CALL_PCM_DEVICE 15
+#define QCHAT_CALL_PCM_DEVICE 14
+#else
+#define VOICE_CALL_PCM_DEVICE 2
+#define VOICE2_CALL_PCM_DEVICE 22
 #define VOLTE_CALL_PCM_DEVICE 14
 #define QCHAT_CALL_PCM_DEVICE 20
 #endif
@@ -249,6 +259,7 @@ typedef void (*acdb_deallocate_t)();
 typedef int  (*acdb_init_t)();
 typedef void (*acdb_send_audio_cal_t)(int, int);
 typedef void (*acdb_send_voice_cal_t)(int, int);
+typedef int (*acdb_reload_vocvoltable_t)(int);
 
 struct platform_data {
     struct audio_device *adev;
@@ -260,11 +271,13 @@ struct platform_data {
     int  btsco_sample_rate;
     bool slowtalk;
     /* Audio calibration related functions */
-    void *acdb_handle;
-    acdb_init_t acdb_init;
-    acdb_deallocate_t acdb_deallocate;
-    acdb_send_audio_cal_t acdb_send_audio_cal;
-    acdb_send_voice_cal_t acdb_send_voice_cal;
+    void                       *acdb_handle;
+    int                        voice_feature_set;
+    acdb_init_t                acdb_init;
+    acdb_deallocate_t          acdb_deallocate;
+    acdb_send_audio_cal_t      acdb_send_audio_cal;
+    acdb_send_voice_cal_t      acdb_send_voice_cal;
+    acdb_reload_vocvoltable_t  acdb_reload_vocvoltable;
 
     void *hw_info;
     struct csd_data *csd;
