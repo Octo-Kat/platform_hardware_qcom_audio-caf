@@ -52,7 +52,7 @@ struct pollfd pfdUsbPlayback[2];
 struct pollfd pfdProxyRecording[2];
 struct pollfd pfdUsbRecording[2];
 
-#define USB_PERIOD_SIZE 2048
+#define USB_PERIOD_SIZE 4096
 #define PROXY_PERIOD_SIZE 3072
 #define PROXY_SUPPORTED_RATE_8000 8000
 #define PROXY_SUPPORTED_RATE_16000 16000
@@ -268,6 +268,7 @@ status_t AudioUsbALSA::getCap(char * type, int &channels, int &sampleRate)
     ALOGD("sampleRate: %d", sampleRate);
     if (sampleRate == 0 ) {
         sampleRate = ratesSupported[0];
+        close(fd);
         ALOGE("Device sampleRate:%d doesn't match with PROXY supported rate\n", sampleRate);
         return BAD_VALUE;
     }

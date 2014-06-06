@@ -35,7 +35,9 @@ class AudioPolicyManager: public AudioPolicyManagerBase
 
 public:
                 AudioPolicyManager(AudioPolicyClientInterface *clientInterface)
-                : AudioPolicyManagerBase(clientInterface) {}
+                : AudioPolicyManagerBase(clientInterface) {
+                    mHdmiAudioDisabled = false;
+                    mHdmiAudioEvent = false; }
 
         virtual ~AudioPolicyManager() {}
 
@@ -48,6 +50,23 @@ public:
                                             uint32_t format,
                                             uint32_t channels,
                                             AudioSystem::audio_in_acoustics acoustics);
+        virtual audio_io_handle_t getOutput(AudioSystem::stream_type stream,
+                                            uint32_t samplingRate = 0,
+                                            uint32_t format = AudioSystem::FORMAT_DEFAULT,
+                                            uint32_t channels = 0,
+                                            AudioSystem::output_flags flags =
+                                                    AudioSystem::OUTPUT_FLAG_INDIRECT,
+                                            const audio_offload_info_t *offloadInfo = NULL);
+
+        virtual bool isOffloadSupported(const audio_offload_info_t& offloadInfo);
+
+        virtual void setPhoneState(int state);
+        virtual status_t startOutput(audio_io_handle_t output,
+                                     AudioSystem::stream_type stream,
+                                     int session = 0);
+        virtual status_t stopOutput(audio_io_handle_t output,
+                                    AudioSystem::stream_type stream,
+                                    int session = 0);
 protected:
         // return the strategy corresponding to a given stream type
         static routing_strategy getStrategy(AudioSystem::stream_type stream);
@@ -68,8 +87,6 @@ protected:
         // select input device corresponding to requested audio source
         virtual audio_devices_t getDeviceForInputSource(int inputSource);
 
-        static bool isVirtualInputDevice(audio_devices_t device);
-
         // compute the actual volume for a given stream according to the requested index and a particular
         // device
         virtual float computeVolume(int stream, int index, audio_io_handle_t output, audio_devices_t device);
@@ -77,8 +94,20 @@ protected:
         // check that volume change is permitted, compute and send new volume to audio hardware
         status_t checkAndSetVolume(int stream, int index, audio_io_handle_t output, audio_devices_t device, int delayMs = 0, bool force = false);
 
+        audio_devices_t getNewDevice(audio_io_handle_t output, bool fromCache);
         // returns the category the device belongs to with regard to volume curve management
         static device_category getDeviceCategory(audio_devices_t device);
+
+        static const char* HDMI_SPKR_STR;
+
+        //parameter indicates of HDMI speakers disabled from the Qualcomm settings
+        bool mHdmiAudioDisabled;
+
+        //parameter indicates if HDMI plug in/out detected
+        bool mHdmiAudioEvent;
+
+private:
+        void handleNotificationRoutingForStream(AudioSystem::stream_type stream);
 
 };
 };

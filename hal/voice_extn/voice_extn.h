@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
  * Not a contribution.
  *
  * Copyright (C) 2013 The Android Open Source Project
@@ -33,6 +33,7 @@ void voice_extn_get_parameters(const struct audio_device *adev,
                                struct str_parms *query,
                                struct str_parms *reply);
 int voice_extn_is_in_call(struct audio_device *adev, bool *in_call);
+int voice_extn_is_in_call_rec_stream(struct stream_in *in, bool *in_call_rec);
 int voice_extn_get_active_session_id(struct audio_device *adev,
                                      uint32_t *session_id);
 void voice_extn_in_get_parameters(struct stream_in *in,
@@ -76,6 +77,11 @@ static void voice_extn_get_parameters(const struct audio_device *adev,
 }
 
 static int voice_extn_is_in_call(struct audio_device *adev, bool *in_call)
+{
+    return -ENOSYS;
+}
+
+static int voice_extn_is_in_call_rec_stream(struct stream_in *in, bool *in_call_rec)
 {
     return -ENOSYS;
 }
@@ -128,8 +134,11 @@ int voice_extn_compress_voip_set_volume(struct audio_device *adev, float volume)
 int voice_extn_compress_voip_select_devices(struct audio_device *adev,
                                             snd_device_t *out_snd_device,
                                             snd_device_t *in_snd_device);
-void voice_extn_compress_voip_set_parameters(struct audio_device *adev,
+int voice_extn_compress_voip_set_parameters(struct audio_device *adev,
                                              struct str_parms *parms);
+void voice_extn_compress_voip_get_parameters(const struct audio_device *adev,
+                                             struct str_parms *query,
+                                             struct str_parms *reply);
 
 void voice_extn_compress_voip_out_get_parameters(struct stream_out *out,
                                                  struct str_parms *query,
@@ -138,6 +147,7 @@ void voice_extn_compress_voip_in_get_parameters(struct stream_in *in,
                                                 struct str_parms *query,
                                                 struct str_parms *reply);
 bool voice_extn_compress_voip_pcm_prop_check();
+bool voice_extn_dedicated_voip_device_prop_check();
 bool voice_extn_compress_voip_is_active(struct audio_device *adev);
 bool voice_extn_compress_voip_is_format_supported(audio_format_t format);
 bool voice_extn_compress_voip_is_config_supported(struct audio_config *config);
@@ -166,7 +176,7 @@ static int voice_extn_compress_voip_open_input_stream(struct stream_in *in)
     return -ENOSYS;
 }
 
-static int voice_extn_compress_voip_out_get_buffer_size(struct audio_stream *stream)
+static int voice_extn_compress_voip_out_get_buffer_size(struct stream_out *stream)
 {
     ALOGE("%s: COMPRESS_VOIP_ENABLED is not defined", __func__);
     return -ENOSYS;
@@ -210,8 +220,16 @@ static int voice_extn_compress_voip_select_devices(struct audio_device *adev,
     return -ENOSYS;
 }
 
-static void voice_extn_compress_voip_set_parameters(struct audio_device *adev,
+static int voice_extn_compress_voip_set_parameters(struct audio_device *adev,
                                                     struct str_parms *parms)
+{
+    ALOGE("%s: COMPRESS_VOIP_ENABLED is not defined", __func__);
+    return -ENOSYS;
+}
+
+static void voice_extn_compress_voip_get_parameters(const struct audio_device *adev,
+                                                    struct str_parms *query,
+                                                    struct str_parms *reply)
 {
     ALOGE("%s: COMPRESS_VOIP_ENABLED is not defined", __func__);
 }
@@ -233,6 +251,11 @@ static void voice_extn_compress_voip_in_get_parameters(struct stream_in *in,
 static bool voice_extn_compress_voip_pcm_prop_check()
 {
     ALOGE("%s: COMPRESS_VOIP_ENABLED is not defined", __func__);
+    return false;
+}
+
+static bool voice_extn_dedicated_voip_device_prop_check()
+{
     return false;
 }
 

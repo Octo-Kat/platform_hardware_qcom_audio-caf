@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -227,8 +227,8 @@ static int spkr_calibrate(int t0)
     uc_info_rx->out_snd_device = SND_DEVICE_OUT_SPEAKER_PROTECTED;
     pthread_mutex_lock(&adev->lock);
     disable_rx = true;
-    enable_snd_device(adev, SND_DEVICE_OUT_SPEAKER_PROTECTED, true);
-    enable_audio_route(adev, uc_info_rx, true);
+    enable_snd_device(adev, SND_DEVICE_OUT_SPEAKER_PROTECTED);
+    enable_audio_route(adev, uc_info_rx);
     pthread_mutex_unlock(&adev->lock);
 
     pcm_dev_rx_id = platform_get_pcm_device_id(uc_info_rx->id, PCM_PLAYBACK);
@@ -240,8 +240,9 @@ static int spkr_calibrate(int t0)
         goto exit;
     }
     handle.pcm_rx = handle.pcm_tx = NULL;
-    handle.pcm_rx = pcm_open(SOUND_CARD, pcm_dev_rx_id,
-                    PCM_OUT, &pcm_config_skr_prot);
+    handle.pcm_rx = pcm_open(adev->snd_card,
+                             pcm_dev_rx_id,
+                             PCM_OUT, &pcm_config_skr_prot);
     if (handle.pcm_rx && !pcm_is_ready(handle.pcm_rx)) {
         ALOGE("%s: %s", __func__, pcm_get_error(handle.pcm_rx));
         status.status = -EIO;
@@ -256,8 +257,8 @@ static int spkr_calibrate(int t0)
 
     pthread_mutex_lock(&adev->lock);
     disable_tx = true;
-    enable_snd_device(adev, SND_DEVICE_IN_CAPTURE_VI_FEEDBACK, true);
-    enable_audio_route(adev, uc_info_tx, true);
+    enable_snd_device(adev, SND_DEVICE_IN_CAPTURE_VI_FEEDBACK);
+    enable_audio_route(adev, uc_info_tx);
     pthread_mutex_unlock(&adev->lock);
 
     pcm_dev_tx_id = platform_get_pcm_device_id(uc_info_tx->id, PCM_CAPTURE);
@@ -267,8 +268,9 @@ static int spkr_calibrate(int t0)
         status.status = -ENODEV;
         goto exit;
     }
-    handle.pcm_tx = pcm_open(SOUND_CARD, pcm_dev_tx_id,
-                    PCM_IN, &pcm_config_skr_prot);
+    handle.pcm_tx = pcm_open(adev->snd_card,
+                             pcm_dev_tx_id,
+                             PCM_IN, &pcm_config_skr_prot);
     if (handle.pcm_tx && !pcm_is_ready(handle.pcm_tx)) {
         ALOGE("%s: %s", __func__, pcm_get_error(handle.pcm_tx));
         status.status = -EIO;
@@ -334,12 +336,12 @@ exit:
         handle.pcm_tx = NULL;
         pthread_mutex_lock(&adev->lock);
         if (disable_rx) {
-            disable_snd_device(adev, SND_DEVICE_OUT_SPEAKER_PROTECTED, true);
-            disable_audio_route(adev, uc_info_rx, true);
+            disable_snd_device(adev, SND_DEVICE_OUT_SPEAKER_PROTECTED);
+            disable_audio_route(adev, uc_info_rx);
         }
         if (disable_tx) {
-            disable_snd_device(adev, SND_DEVICE_IN_CAPTURE_VI_FEEDBACK, true);
-            disable_audio_route(adev, uc_info_tx, true);
+            disable_snd_device(adev, SND_DEVICE_IN_CAPTURE_VI_FEEDBACK);
+            disable_audio_route(adev, uc_info_tx);
         }
         pthread_mutex_unlock(&adev->lock);
 
@@ -596,7 +598,7 @@ int audio_extn_spkr_prot_start_processing(snd_device_t snd_device)
     }
     ALOGV("%s: snd_device(%d: %s)", __func__, snd_device,
          platform_get_snd_device_name(SND_DEVICE_OUT_SPEAKER_PROTECTED));
-    audio_route_apply_path(adev->audio_route,
+    audio_route_apply_and_update_path(adev->audio_route,
         platform_get_snd_device_name(SND_DEVICE_OUT_SPEAKER_PROTECTED));
 
     pthread_mutex_lock(&handle.mutex_spkr_prot);
@@ -608,8 +610,8 @@ int audio_extn_spkr_prot_start_processing(snd_device_t snd_device)
         uc_info_tx.out_snd_device = SND_DEVICE_NONE;
         handle.pcm_tx = NULL;
 
-        enable_snd_device(adev, SND_DEVICE_IN_CAPTURE_VI_FEEDBACK, true);
-        enable_audio_route(adev, &uc_info_tx, true);
+        enable_snd_device(adev, SND_DEVICE_IN_CAPTURE_VI_FEEDBACK);
+        enable_audio_route(adev, &uc_info_tx);
 
         pcm_dev_tx_id = platform_get_pcm_device_id(uc_info_tx.id, PCM_CAPTURE);
         if (pcm_dev_tx_id < 0) {
@@ -618,8 +620,9 @@ int audio_extn_spkr_prot_start_processing(snd_device_t snd_device)
             ret = -ENODEV;
             goto exit;
         }
-        handle.pcm_tx = pcm_open(SOUND_CARD, pcm_dev_tx_id,
-                        PCM_IN, &pcm_config_skr_prot);
+        handle.pcm_tx = pcm_open(adev->snd_card,
+                                 pcm_dev_tx_id,
+                                 PCM_IN, &pcm_config_skr_prot);
         if (handle.pcm_tx && !pcm_is_ready(handle.pcm_tx)) {
             ALOGE("%s: %s", __func__, pcm_get_error(handle.pcm_tx));
             ret = -EIO;
@@ -630,13 +633,17 @@ int audio_extn_spkr_prot_start_processing(snd_device_t snd_device)
             ret = -EINVAL;
         }
     }
+
 exit:
+   /* Clear VI feedback cal and replace with handset MIC  */
+   platform_send_audio_calibration(adev->platform,
+        SND_DEVICE_IN_HANDSET_MIC);
     if (ret) {
         if (handle.pcm_tx)
             pcm_close(handle.pcm_tx);
         handle.pcm_tx = NULL;
-        disable_snd_device(adev, SND_DEVICE_IN_CAPTURE_VI_FEEDBACK, true);
-        disable_audio_route(adev, &uc_info_tx, true);
+        disable_snd_device(adev, SND_DEVICE_IN_CAPTURE_VI_FEEDBACK);
+        disable_audio_route(adev, &uc_info_tx);
     } else
         handle.spkr_processing_state = SPKR_PROCESSING_IN_PROGRESS;
     pthread_mutex_unlock(&handle.mutex_spkr_prot);
@@ -660,12 +667,12 @@ void audio_extn_spkr_prot_stop_processing()
         if (handle.pcm_tx)
             pcm_close(handle.pcm_tx);
         handle.pcm_tx = NULL;
-        disable_snd_device(adev, SND_DEVICE_IN_CAPTURE_VI_FEEDBACK, true);
-        disable_audio_route(adev, &uc_info_tx, true);
+        disable_snd_device(adev, SND_DEVICE_IN_CAPTURE_VI_FEEDBACK);
+        disable_audio_route(adev, &uc_info_tx);
     }
     handle.spkr_processing_state = SPKR_PROCESSING_IN_IDLE;
     pthread_mutex_unlock(&handle.mutex_spkr_prot);
-    audio_route_reset_path(adev->audio_route,
+    audio_route_reset_and_update_path(adev->audio_route,
       platform_get_snd_device_name(SND_DEVICE_OUT_SPEAKER_PROTECTED));
     ALOGV("%s: Exit", __func__);
 }
